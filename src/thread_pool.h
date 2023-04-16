@@ -1,11 +1,10 @@
-#ifndef THREAD_POOL_H
-#define THREAD_POOL_H
-#include<pthread.h>
-#include"locker.h"
-#include<list>
-#include<exception>
-#include<cstdio>
-#include"locker.h"
+#pragma once
+#include <pthread.h>
+#include <list>
+#include <exception>
+#include <cstdio>
+#include "locker.h"
+
 template<class T>
 class thread_pool{
 public:
@@ -122,7 +121,6 @@ void thread_pool<T>::run(){
     }
 }   
 
-#endif
 
 
 

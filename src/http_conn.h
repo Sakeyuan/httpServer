@@ -1,5 +1,4 @@
-#ifndef HTTPCONNECTION_H
-#define HTTPCONNECTION_H
+#pragma once
 #include<sys/epoll.h>
 #include<iostream>
 #include<thread>
@@ -27,6 +26,7 @@ public:
     static const int FILENAME_LEN = 200;
     static const int READ_BUF_SIZE=2048;        //读缓存大小
     static const int WRITE_BUF_SIZE=2048;
+    
 
     //请求方法
     enum METHOD{GET = 0,POST,HEAD,PUT,DELETE,TRACE,OPTIONS,CONNECT };
@@ -68,8 +68,6 @@ public:
     //处理客户端请求
     void process(); 
 
-    http_conn();
-
 private:
 
     int m_sockfd;                       //客户文件描述符
@@ -108,10 +106,8 @@ private:
 
     int bytes_have_send;            //已经发送字节数
 
-
-    //资源根目录
-    const char* root_path="/home/yuanjiafei/myWebServer/resources";          
-
+    char root_path[FILENAME_LEN];     //资源根目录
+    
     char m_real_file[FILENAME_LEN];     
 
     char* m_real_file_addr;           //请求文件地址
@@ -146,7 +142,6 @@ private:
 
     //处理响应
     bool process_write(HTTP_CODE ret);
-
     bool add_state_line(int state, const char* title);       //封装响应行（状态行）
     bool add_response( const char* format, ... );           
     bool add_headers(int content_len);                       //封装响应头
@@ -155,8 +150,8 @@ private:
     bool add_content_length( int content_length );
     bool add_linger();
     bool add_blank_line();
+    void get_resources_path();
 
     //释放map映射
     void unmap();
 };
-#endif

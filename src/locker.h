@@ -1,5 +1,4 @@
-#ifndef LOCKER_H
-#define LOCKER_H
+#pragma once
 #include<pthread.h>
 #include<semaphore.h>
 #include<exception>
@@ -54,5 +53,3 @@ private:
 
     sem_t m_sem;
 };
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef WERSERVER_H
-#define WERSERVER_H
+#pragma once
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
@@ -54,5 +53,3 @@ public:
         
     epoll_event events[MAX_EVENT_NUM];
 };
-
-#endif

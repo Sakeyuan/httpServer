@@ -1,6 +1,7 @@
 #include"http_conn.h"
 int http_conn::m_epollfd = -1;       //所有socket的事件注册在一个epollfd时 
 int http_conn::m_user_nums = 0;     //统计用户数量
+
 //http响应状态信息
 const char *ok_200_title = "OK";
 const char *error_400_title = "Bad Request";
@@ -43,15 +44,29 @@ void modfd(int epollfd,int fd,int ev){
     epoll_ctl(epollfd,EPOLL_CTL_MOD,fd,&event);
 }
 
+void http_conn::get_resources_path(){
+        //构造资源路径
+    getcwd(root_path,sizeof(root_path));
+    char* pos=strstr(root_path,"/build/bin");
+    if(pos){
+        *pos = '\0';
+    }
+    strcat(root_path,"/resources");
+}
 void http_conn::init(int sockfd,const sockaddr_in& addr){
     m_sockfd = sockfd;
     m_address = addr;
+    
+    //初始化资源路径
+    get_resources_path();
+    
     //端口复用
     int reuse=1;
     setsockopt(m_sockfd,SOL_SOCKET,SO_REUSEPORT,&reuse,sizeof(reuse));
 
     //添加到
     add_fd(m_epollfd,m_sockfd,true);
+    
     m_user_nums++;  //用户数+1
 
     init();  //初始化状态机
@@ -118,6 +133,7 @@ void http_conn::process(){
     if(!write_ret){
         close_conn();
     }
+    printf("生成响应报文成功\n");
     modfd(m_epollfd,m_sockfd,EPOLLOUT);
 }
 
@@ -126,13 +142,14 @@ http_conn::HTTP_CODE http_conn::process_read(){
     HTTP_CODE ret = NO_REQUEST;           //主状态机初始状态
     LINE_STATE line_state = LINE_OK;      //从状态机初始状态
 
-    char* text=0;
+    char* text = 0;
     //逐行解析
     while((m_check_state == CHECK_STATE_CONTENT && line_state == LINE_OK) || (line_state = parse_line()) == LINE_OK){
             //解析到一行完整数据 ，或者解析到请求体，也算是完整数据
             
             //获取一行数据
             text = get_line();
+            printf("line: %s\n",text);
             m_start_line = m_check_idx;  //读取一行后，将m_start_line放置到下一行开头，表示行的开始
             switch (m_check_state)
             {
@@ -316,7 +333,9 @@ void http_conn::unmap(){
 //一次性写
 bool http_conn::write(){ 
     int temp = 0;
+    printf("正在写入 %d 字节\n",bytes_to_send);
     if(bytes_to_send == 0){              //没有要发送的数据
+        printf("没有要发送的数据\n");
         modfd(m_epollfd,m_sockfd,EPOLLIN);
         init();
         return true;
@@ -324,6 +343,7 @@ bool http_conn::write(){
     while (true)
     {
         temp = writev(m_sockfd,m_iv,m_iv_num);
+        printf("写入 %d 字节\n",temp);
         if(temp <= -1){
             if(errno == EAGAIN){
                 modfd(m_epollfd,m_sockfd,EPOLLOUT);
@@ -336,6 +356,7 @@ bool http_conn::write(){
         bytes_have_send+=temp;
         if(bytes_have_send >= m_iv[0].iov_len){
             //头文件发送完
+            printf("头文件发送完成\n");
             m_iv[0].iov_len = 0;
             m_iv[1].iov_base = m_real_file_addr+(bytes_have_send-m_write_idx);
             m_iv[1].iov_len = bytes_to_send;
@@ -411,9 +432,11 @@ bool http_conn::add_content_type() {
 
 // 根据服务器处理HTTP请求的结果，判断给客户端的内容
 bool http_conn::process_write(HTTP_CODE ret){
+   
     switch (ret)
     {
     case INTERNAL_ERROR:
+        printf("服务器处理结果 INTERNAL_ERROR");
         add_state_line(500,error_500_title);
         add_headers(strlen(error_500_form));
         if(!add_content(error_500_form)){
@@ -422,6 +445,7 @@ bool http_conn::process_write(HTTP_CODE ret){
         break;
 
     case BAD_REQUEST:
+        printf("服务器处理结果 BAD_REQUEST");
         add_state_line(400,error_400_title);
         add_headers(strlen(error_400_form));
         if(!add_content(error_400_form)){
@@ -430,6 +454,7 @@ bool http_conn::process_write(HTTP_CODE ret){
         break;
 
     case NO_RESOURSE:
+        printf("服务器处理结果 NO_RESOURSE");
         add_state_line(404,error_404_title);
         add_headers(strlen(error_404_form));
         if(!add_content(error_404_form)){
@@ -438,6 +463,7 @@ bool http_conn::process_write(HTTP_CODE ret){
         break;
 
     case FORBIDDEN_REQUST:
+        printf("服务器处理结果 FORBIDDEN_REQUST");
         add_state_line(403,error_403_title);
         add_headers(strlen(error_403_form));
         if(!add_content(error_403_form)){
@@ -446,6 +472,7 @@ bool http_conn::process_write(HTTP_CODE ret){
         break;
     
     case FILE_REQUEST:
+        printf("服务器处理结果 FILE_REQUEST");
         add_state_line(200,ok_200_title);
         add_headers(m_file_stat.st_size);
 
@@ -462,7 +489,7 @@ bool http_conn::process_write(HTTP_CODE ret){
         return false;
         break;
     }
-
+    printf("请求构造成功\n");
     //没有请求体
     m_iv[ 0 ].iov_base = m_write_buf;
     m_iv[ 0 ].iov_len = m_write_idx;
@@ -470,6 +497,7 @@ bool http_conn::process_write(HTTP_CODE ret){
     return true;
 }
 
+//关闭链接 
 void http_conn::close_conn(){
     if(m_sockfd != -1){
         removefd(m_epollfd,m_sockfd);
@@ -478,7 +506,3 @@ void http_conn::close_conn(){
     }
 }
 
-http_conn::http_conn(){
-    m_epollfd = -1;       //所有socket的事件注册在一个epollfd时 
-    m_user_nums = 0;     //统计用户数量
-}

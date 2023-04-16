@@ -1,0 +1,5 @@
+/home/yjf/httpServer/build/CMakeFiles/rebuild_cache.dir
+/home/yjf/httpServer/build/CMakeFiles/edit_cache.dir
+/home/yjf/httpServer/build/bin/CMakeFiles/rebuild_cache.dir
+/home/yjf/httpServer/build/bin/CMakeFiles/edit_cache.dir
+/home/yjf/httpServer/build/bin/CMakeFiles/webServer.dir
