@@ -79,10 +79,8 @@ void webServer::start(){
             }
             else if(events[i].events & EPOLLOUT){  //写事件，一次性写完
                 if(!user[sockfd].write()){
-                    printf("响应失败\n");
                     user[sockfd].close_conn();
                 }
-                printf("响应成功\n");
             }
         }
     }

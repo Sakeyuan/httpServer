@@ -1,1 +1,0 @@
-/usr/bin/c++     CMakeFiles/webServer.dir/http_conn.cpp.o CMakeFiles/webServer.dir/locker.cpp.o CMakeFiles/webServer.dir/main.cpp.o CMakeFiles/webServer.dir/webServer.cpp.o  -o webServer  -lpthread 

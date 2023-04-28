@@ -45,7 +45,7 @@ void modfd(int epollfd,int fd,int ev){
 }
 
 void http_conn::get_resources_path(){
-        //构造资源路径
+    //构造资源路径
     getcwd(root_path,sizeof(root_path));
     char* pos=strstr(root_path,"/build/bin");
     if(pos){
@@ -53,6 +53,7 @@ void http_conn::get_resources_path(){
     }
     strcat(root_path,"/resources");
 }
+
 void http_conn::init(int sockfd,const sockaddr_in& addr){
     m_sockfd = sockfd;
     m_address = addr;
@@ -97,7 +98,7 @@ bool http_conn::read(){  //一次性读
         return false;  //缓存区满
     }
     //已经读取字节
-    int bytes_read=0;
+    int bytes_read = 0;
     while (true)
     {
         bytes_read = recv(m_sockfd,m_read_buf+m_read_idx,READ_BUF_SIZE-m_read_idx,0);
@@ -113,27 +114,25 @@ bool http_conn::read(){  //一次性读
         }
         m_read_idx+=bytes_read;
     }
+    printf("报文信息:\n%s\n",m_read_buf);
     return true;
 }        
 
 //线程池工作线程调用，处理http请求的入口函数
 void http_conn::process(){
     //解析http请求
-    //printf("正在解析http报文......");
     HTTP_CODE read_ret = process_read();
     if(read_ret == NO_REQUEST){
         //继续监听
         modfd(m_epollfd,m_sockfd,EPOLLIN);
         return; 
     }
-    printf("http请求报文解析完成\n");
     
     //生成响应http报文
     bool write_ret = process_write(read_ret);
     if(!write_ret){
         close_conn();
     }
-    printf("生成响应报文成功\n");
     modfd(m_epollfd,m_sockfd,EPOLLOUT);
 }
 
@@ -146,10 +145,8 @@ http_conn::HTTP_CODE http_conn::process_read(){
     //逐行解析
     while((m_check_state == CHECK_STATE_CONTENT && line_state == LINE_OK) || (line_state = parse_line()) == LINE_OK){
             //解析到一行完整数据 ，或者解析到请求体，也算是完整数据
-            
             //获取一行数据
             text = get_line();
-            printf("line: %s\n",text);
             m_start_line = m_check_idx;  //读取一行后，将m_start_line放置到下一行开头，表示行的开始
             switch (m_check_state)
             {
@@ -218,6 +215,9 @@ http_conn::HTTP_CODE http_conn::parse_req_line(char* req_text){
     if(!m_url || (m_url[0] != '/')){
         return BAD_REQUEST;
     }
+    if(strlen(m_url) == 1){
+        strcat(m_url,"welcome.html");
+    }
     m_check_state = CHECK_STATE_HEADER;  //主状态机状态变成检查请求头
    
     return NO_REQUEST;   //报文还没有解析完成
@@ -250,7 +250,8 @@ http_conn::HTTP_CODE http_conn::parse_req_header(char* req_text){
         m_content_length = atol(req_text);
     }
     else{
-        printf("unknow header %s\n",req_text);
+        //不处理不需要信息
+        //printf("unknow header %s\n",req_text);
     }
     return NO_REQUEST;
 }
@@ -298,7 +299,6 @@ http_conn::HTTP_CODE http_conn::do_request(){
     int len = strlen(root_path);
     //      /home/yuanjiafei/myWebServer/resources/index.html
     strncpy(m_real_file+len,m_url,FILENAME_LEN-len-1);   //构造资源文件具体地址
-    
     if(stat(m_real_file,&m_file_stat) < 0){  //获取文件属性，存入m_file_stat
         return NO_RESOURSE;  //服务器没有资源
     }
@@ -333,9 +333,7 @@ void http_conn::unmap(){
 //一次性写
 bool http_conn::write(){ 
     int temp = 0;
-    printf("正在写入 %d 字节\n",bytes_to_send);
     if(bytes_to_send == 0){              //没有要发送的数据
-        printf("没有要发送的数据\n");
         modfd(m_epollfd,m_sockfd,EPOLLIN);
         init();
         return true;
@@ -343,7 +341,6 @@ bool http_conn::write(){
     while (true)
     {
         temp = writev(m_sockfd,m_iv,m_iv_num);
-        printf("写入 %d 字节\n",temp);
         if(temp <= -1){
             if(errno == EAGAIN){
                 modfd(m_epollfd,m_sockfd,EPOLLOUT);
@@ -356,7 +353,6 @@ bool http_conn::write(){
         bytes_have_send+=temp;
         if(bytes_have_send >= m_iv[0].iov_len){
             //头文件发送完
-            printf("头文件发送完成\n");
             m_iv[0].iov_len = 0;
             m_iv[1].iov_base = m_real_file_addr+(bytes_have_send-m_write_idx);
             m_iv[1].iov_len = bytes_to_send;
@@ -436,7 +432,6 @@ bool http_conn::process_write(HTTP_CODE ret){
     switch (ret)
     {
     case INTERNAL_ERROR:
-        printf("服务器处理结果 INTERNAL_ERROR");
         add_state_line(500,error_500_title);
         add_headers(strlen(error_500_form));
         if(!add_content(error_500_form)){
@@ -445,7 +440,6 @@ bool http_conn::process_write(HTTP_CODE ret){
         break;
 
     case BAD_REQUEST:
-        printf("服务器处理结果 BAD_REQUEST");
         add_state_line(400,error_400_title);
         add_headers(strlen(error_400_form));
         if(!add_content(error_400_form)){
@@ -454,7 +448,6 @@ bool http_conn::process_write(HTTP_CODE ret){
         break;
 
     case NO_RESOURSE:
-        printf("服务器处理结果 NO_RESOURSE");
         add_state_line(404,error_404_title);
         add_headers(strlen(error_404_form));
         if(!add_content(error_404_form)){
@@ -463,7 +456,6 @@ bool http_conn::process_write(HTTP_CODE ret){
         break;
 
     case FORBIDDEN_REQUST:
-        printf("服务器处理结果 FORBIDDEN_REQUST");
         add_state_line(403,error_403_title);
         add_headers(strlen(error_403_form));
         if(!add_content(error_403_form)){
@@ -472,7 +464,6 @@ bool http_conn::process_write(HTTP_CODE ret){
         break;
     
     case FILE_REQUEST:
-        printf("服务器处理结果 FILE_REQUEST");
         add_state_line(200,ok_200_title);
         add_headers(m_file_stat.st_size);
 
@@ -489,7 +480,6 @@ bool http_conn::process_write(HTTP_CODE ret){
         return false;
         break;
     }
-    printf("请求构造成功\n");
     //没有请求体
     m_iv[ 0 ].iov_base = m_write_buf;
     m_iv[ 0 ].iov_len = m_write_idx;
