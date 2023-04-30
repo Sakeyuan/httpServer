@@ -1,4 +1,7 @@
 #include"http_conn.h"
+
+#define LT
+//#define ET
 int http_conn::m_epollfd = -1;       //所有socket的事件注册在一个epollfd时 
 int http_conn::m_user_nums = 0;     //统计用户数量
 
@@ -19,14 +22,20 @@ void setnonblocking(int fd){
         fcntl(fd,F_SETFL,new_flag);
 }
 
-void add_fd(int epollfd,int fd, bool one_shot){
+void add_fd(int epollfd,int fd , bool one_shot){
     epoll_event event;
     event.data.fd = fd;
-    event.events = EPOLLIN | EPOLLRDHUP;
-    //event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
     if(one_shot){
         event.events |= EPOLLONESHOT;
     }
+    #ifdef LT
+        event.events = EPOLLIN | EPOLLRDHUP;
+    #endif
+
+    #ifdef ET 
+        event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    #endif
+
     epoll_ctl(epollfd,EPOLL_CTL_ADD,fd,&event);
     
     setnonblocking(fd);
@@ -40,7 +49,13 @@ void removefd(int epollfd,int fd){
 void modfd(int epollfd,int fd,int ev){
     epoll_event event;
     event.data.fd=fd;
-    event.events = ev | EPOLLRDHUP | EPOLLONESHOT;
+    #ifdef LT
+        event.events = ev | EPOLLRDHUP | EPOLLONESHOT;
+    #endif
+
+    #ifdef ET
+        event.events = ev | EPOLLRDHUP | EPOLLONESHOT | EPOLLET;
+    #endif
     epoll_ctl(epollfd,EPOLL_CTL_MOD,fd,&event);
 }
 
@@ -361,8 +376,9 @@ bool http_conn::write(){
             m_iv[0].iov_len = m_iv[0].iov_len - temp;
         }
         if(bytes_to_send <= 0){
-            // 发送HTTP响应成功，根据HTTP请求中的Connection字段决定是否立即关闭连接
+            //发送HTTP响应成功，根据HTTP请求中的Connection字段决定是否立即关闭连接
             unmap();
+ 
             modfd(m_epollfd,m_sockfd,EPOLLIN);
             if(m_linger){
                 init();

@@ -1,5 +1,7 @@
 #include"webServer.h"
 
+#define LT
+//#define ET
 webServer::webServer(int port){
     //端口号
     m_port=port;
@@ -54,16 +56,47 @@ void webServer::start(){
             int sockfd=events[i].data.fd;
             if(sockfd == listenfd){     //产生客户端连接
                 socklen_t clnt_addr_sz=sizeof(listenfd); 
+        #ifdef LT
                 int connfd = accept(listenfd,(struct sockaddr*)&clnt_addr,&clnt_addr_sz);
-                
+                if(connfd < 0){
+                    // 已经没有连接请求，跳出循环
+                    printf("已经没有连接请求\n");
+                    continue;
+                }
                 if(http_conn::m_user_nums >= MAX_FD){  //连接满
                     //服务器正忙
+                    printf("服务器正忙\n");
                     close(connfd);
                     continue;
                 }
                 //将新客户初始化
-                user[connfd].init(connfd,clnt_addr);   
+                user[connfd].init(connfd,clnt_addr);  
+        #endif 
+
+        #ifdef ET
+                while (true)
+                {
+                    int connfd = accept(listenfd,(struct sockaddr*)&clnt_addr,&clnt_addr_sz);
+                    if(connfd < 0){
+                        // 已经没有连接请求，跳出循环
+                        printf("已经没有连接请求\n");
+                        break;
+                    }
+                    if(http_conn::m_user_nums >= MAX_FD){  //连接满
+                        //服务器正忙
+                        printf("服务器正忙\n");
+                        close(connfd);
+                        break;
+                    }
+                    //将新客户初始化
+                    user[connfd].init(connfd,clnt_addr);   
+                }
+                continue;
+        #endif
+
             }
+ 
+
             else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)){  
                 //客户端异常断开或者错误事件
                 user[sockfd].close_conn();
