@@ -50,6 +50,5 @@ public:
     bool post();  //增加信号量  
 
 private:
-
     sem_t m_sem;
 };

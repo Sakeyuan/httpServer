@@ -80,7 +80,9 @@ thread_pool<T>::~thread_pool()
 template<class T>
 bool thread_pool<T>::add(T* request){
     m_queue_lock.lock();
-    if(m_work_queue.size() > m_max_req_nums){  //请求队列已经满了
+    
+    //请求队列已经满了
+    if(m_work_queue.size() > m_max_req_nums){  
         m_queue_lock.unlock();
         return false;
     }
@@ -110,7 +112,7 @@ void thread_pool<T>::run(){
             continue;
         }
 
-        T* request=m_work_queue.front();
+        T* request = m_work_queue.front();
         m_work_queue.pop_front();
         m_queue_lock.unlock();
         

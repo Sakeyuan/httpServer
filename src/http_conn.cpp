@@ -17,9 +17,9 @@ const char *error_500_title = "Internal Error";
 const char *error_500_form = "There was an unusual problem serving the request file.\n";
 
 void setnonblocking(int fd){
-        int old_flag=fcntl(fd,F_GETFL);
-        int new_flag=old_flag | O_NONBLOCK;
-        fcntl(fd,F_SETFL,new_flag);
+    int old_flag=fcntl(fd,F_GETFL);
+    int new_flag=old_flag | O_NONBLOCK;
+    fcntl(fd,F_SETFL,new_flag);
 }
 
 void add_fd(int epollfd,int fd , bool one_shot){

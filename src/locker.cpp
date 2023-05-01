@@ -35,6 +35,7 @@ cond::~cond(){
 bool cond::wait(pthread_mutex_t *mutex){
     return pthread_cond_wait(&m_cond,mutex) == 0;  //返回0表示抢到互斥锁
 }
+
 bool cond::timed_wait(pthread_mutex_t *mutex,struct timespec t){
     return pthread_cond_timedwait(&m_cond,mutex,&t) == 0;
 }

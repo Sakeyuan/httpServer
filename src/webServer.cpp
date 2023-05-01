@@ -4,11 +4,14 @@
 //#define ET
 webServer::webServer(int port){
     //端口号
-    m_port=port;
+    m_port = port;
+    m_stop = false;
 
     //信号处理
     add_sig(SIGPIPE,SIG_IGN);
-
+    add_sig(SIGINT,sig_handler);
+    add_sig(SIGTSTP,sig_handler);
+    
     //初始化线程池
     try{
         pool = new thread_pool<http_conn>;
@@ -19,7 +22,7 @@ webServer::webServer(int port){
     //保存客户端信息
     user =new http_conn[MAX_FD];
 
-    listenfd=socket(PF_INET,SOCK_STREAM,0);
+    listenfd = socket(PF_INET,SOCK_STREAM,0);
 
     int reuse=1;
     setsockopt(listenfd,SOL_SOCKET,SO_REUSEPORT,&reuse,sizeof(reuse));
@@ -36,17 +39,26 @@ webServer::webServer(int port){
         throw std::exception();
     }
 
-    epollfd=epoll_create(5);
+    epollfd = epoll_create(5);
 
     //将监听的文件描述符添加到epoll对象中
     add_fd(epollfd,listenfd,false);
+
+    //创建管道
+    if(socketpair(PF_UNIX,SOCK_STREAM,0,pipefd) == -1){
+        printf("socketpair error");
+        throw std::exception();
+    }
+    setnonblocking(pipefd[1]);
+    add_fd(epollfd,pipefd[0],false);
     http_conn::m_epollfd = epollfd;
 }
   
 void webServer::start(){
-    while (true)
+    while (!m_stop)
     {
-        int nums=epoll_wait(epollfd,events,MAX_EVENT_NUM,-1);
+        int nums = epoll_wait(epollfd,events,MAX_EVENT_NUM,-1);
+        
         if(nums < 0 && errno != EINTR){
             throw std::exception();
         }
@@ -55,7 +67,7 @@ void webServer::start(){
         {
             int sockfd=events[i].data.fd;
             if(sockfd == listenfd){     //产生客户端连接
-                socklen_t clnt_addr_sz=sizeof(listenfd); 
+                socklen_t clnt_addr_sz = sizeof(listenfd); 
         #ifdef LT
                 int connfd = accept(listenfd,(struct sockaddr*)&clnt_addr,&clnt_addr_sz);
                 if(connfd < 0){
@@ -93,14 +105,36 @@ void webServer::start(){
                 }
                 continue;
         #endif
-
             }
- 
 
-            else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)){  
-                //客户端异常断开或者错误事件
-                user[sockfd].close_conn();
+            //信号处理
+            else if((events[i].events & EPOLLIN) && (sockfd == pipefd[0])){
+                int sig = 0;
+                char signals[1024];
+                int ret = recv(pipefd[0],signals,sizeof(signals),0);
+                if(ret == -1 || ret == 0){
+                    continue;
+                } 
+                else{
+                    for(int i=0;i<ret;++i){
+                        switch (signals[i])
+                        {
+                        case SIGINT:{
+                            m_stop = true;
+                            break;
+                        }
+                        case SIGTSTP:{
+                            m_stop = true;
+                            break;
+                        }
+                        default:
+                            break;
+                        }
+                    }
+                }
             }
+
+            //读事件
             else if(events[i].events & EPOLLIN){
                 //有数据可以读
                 if(user[sockfd].read()){
@@ -110,10 +144,18 @@ void webServer::start(){
                     user[sockfd].close_conn();
                 }
             }
-            else if(events[i].events & EPOLLOUT){  //写事件，一次性写完
+
+            //写事件，一次性写完
+            else if(events[i].events & EPOLLOUT){  
                 if(!user[sockfd].write()){
                     user[sockfd].close_conn();
                 }
+            }
+            
+            //客户端关闭连接或者异常
+            else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)){  
+                //客户端异常断开或者错误事件
+                user[sockfd].close_conn();
             }
         }
     }
@@ -134,6 +176,12 @@ void webServer::add_sig(int sig,void(handler)(int)){
     sigaction(sig,&sa,NULL);
 }
 
+void sig_handler(int sig){
+    //保证函数的可重入性，保留线程进入前的errno
+    int old_errno = errno;
+    send(pipefd[1],(char*)&sig,1,0);
+    errno = old_errno;
+}
         
 
 

@@ -26,8 +26,16 @@ extern void removefd(int epollfd,int fd);
 //修改文件描述符,重置socket上的EPOLLONESHOT，确保下次数据来时触发EPOLLIN
 extern void modfd(int epollfd,int fd,int ev);
 
-//报错
-extern void error_handing(const char* message);
+//信号处理
+extern void sig_handler(int sig);
+
+//设置非阻塞
+extern void setnonblocking(int fd);
+
+//信号管道
+static int pipefd[2];
+
+
 class webServer{
 public:
     webServer(int port);
@@ -38,12 +46,14 @@ public:
 public:
 
     int m_port;  //端口号
+
+    int m_stop;  //服务器开启标识
     
-    thread_pool<http_conn>* pool=NULL;      //线程连接池
+    thread_pool<http_conn>* pool = NULL;       //线程连接池
 
     struct sockaddr_in serv_addr;           //服务器地址
 
-    struct sockaddr_in clnt_addr;            //客户端地址
+    struct sockaddr_in clnt_addr;           //客户端地址
 
     int listenfd;                           //客户端文件描述符
 
